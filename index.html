@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spike PWA</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#d63384">
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 16px; background: #fff; color: #222; }
+    button { font-size: 16px; padding: 10px 14px; margin: 4px 0; width: 100%; }
+    input { font-size: 16px; padding: 8px; width: 100%; box-sizing: border-box; margin: 4px 0; }
+    #sortie { white-space: pre-wrap; background: #f6f6f6; padding: 8px; min-height: 80px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>Spike PWA</h1>
+  <p>Test de persistance, de hors ligne et de chiffrement. Aucune donnée personnelle.</p>
+
+  <label>Valeur à écrire
+    <input id="valeur" type="text" value="test-spike">
+  </label>
+  <button id="ecrire">Écrire dans IndexedDB</button>
+  <button id="relire">Relire dans IndexedDB</button>
+
+  <label>Mot de passe de test
+    <input id="motdepasse" type="password" value="mot-de-passe-test">
+  </label>
+  <button id="chiffrer">Tester le chiffrement</button>
+  <button id="mauvais">Tester un mauvais mot de passe</button>
+
+  <h2>Résultat</h2>
+  <div id="sortie">En attente.</div>
+
+  <script>
+    const sortie = document.getElementById('sortie');
+    const afficher = (texte) => { sortie.textContent = texte; };
+
+    // --- IndexedDB ---
+    function ouvrirBase() {
+      return new Promise((resolve, reject) => {
+        const requete = indexedDB.open('spike-db', 1);
+        requete.onupgradeneeded = () => requete.result.createObjectStore('kv');
+        requete.onsuccess = () => resolve(requete.result);
+        requete.onerror = () => reject(requete.error);
+      });
+    }
+
+    async function ecrire(valeur) {
+      const base = await ouvrirBase();
+      await new Promise((resolve, reject) => {
+        const tx = base.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(valeur, 'test');
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+      base.close();
+    }
+
+    async function relire() {
+      const base = await ouvrirBase();
+      const valeur = await new Promise((resolve, reject) => {
+        const requete = base.transaction('kv', 'readonly').objectStore('kv').get('test');
+        requete.onsuccess = () => resolve(requete.result);
+        requete.onerror = () => reject(requete.error);
+      });
+      base.close();
+      return valeur;
+    }
+
+    // --- Chiffrement AES-GCM avec cle derivee PBKDF2 ---
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+
+    async function derivarCle(motDePasse, sel) {
+      const materiel = await crypto.subtle.importKey(
+        'raw', encoder.encode(motDePasse), 'PBKDF2', false, ['deriveKey']
+      );
+      return crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt: sel, iterations: 200000, hash: 'SHA-256' },
+        materiel,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+      );
+    }
+
+    function versBase64(octets) {
+      return btoa(String.fromCharCode(...octets));
+    }
+    function depuisBase64(texte) {
+      return Uint8Array.from(atob(texte), (c) => c.charCodeAt(0));
+    }
+
+    async function chiffrer(texte, motDePasse) {
+      const sel = crypto.getRandomValues(new Uint8Array(16));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const cle = await derivarCle(motDePasse, sel);
+      const chiffre = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cle, encoder.encode(texte));
+      return { sel: versBase64(sel), iv: versBase64(iv), donnees: versBase64(new Uint8Array(chiffre)) };
+    }
+
+    async function dechiffrer(charge, motDePasse) {
+      const cle = await derivarCle(motDePasse, depuisBase64(charge.sel));
+      const clair = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: depuisBase64(charge.iv) }, cle, depuisBase64(charge.donnees)
+      );
+      return decoder.decode(clair);
+    }
+
+    // --- Boutons ---
+    document.getElementById('ecrire').onclick = async () => {
+      try {
+        await ecrire(document.getElementById('valeur').value);
+        afficher('Écriture réussie.');
+      } catch (e) {
+        afficher('Erreur écriture : ' + e);
+      }
+    };
+
+    document.getElementById('relire').onclick = async () => {
+      try {
+        const valeur = await relire();
+        afficher(valeur === undefined ? 'Aucune valeur trouvée.' : 'Valeur relue : ' + valeur);
+      } catch (e) {
+        afficher('Erreur lecture : ' + e);
+      }
+    };
+
+    document.getElementById('chiffrer').onclick = async () => {
+      try {
+        const motDePasse = document.getElementById('motdepasse').value;
+        const charge = await chiffrer('texte secret de test', motDePasse);
+        const clair = await dechiffrer(charge, motDePasse);
+        afficher(clair === 'texte secret de test'
+          ? 'Chiffrement et déchiffrement OK.'
+          : 'Déchiffrement inattendu.');
+      } catch (e) {
+        afficher('Erreur chiffrement : ' + e);
+      }
+    };
+
+    document.getElementById('mauvais').onclick = async () => {
+      try {
+        const charge = await chiffrer('texte secret de test', 'bon-mot-de-passe');
+        await dechiffrer(charge, 'mauvais-mot-de-passe');
+        afficher('ANORMAL : le mauvais mot de passe a été accepté.');
+      } catch (e) {
+        afficher('Mauvais mot de passe refusé, aucun texte partiel renvoyé.');
+      }
+    };
+
+    // --- Service worker ---
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch((e) => {
+        console.error('Service worker non enregistré :', e);
+      });
+    }
+  </script>
+</body>
+</html>
