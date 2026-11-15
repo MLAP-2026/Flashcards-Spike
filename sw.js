@@ -1,6 +1,6 @@
 // Service worker du spike : mise en cache de la coquille pour un usage hors ligne.
-const CACHE = 'spike-v1';
-const RESSOURCES = ['./', './index.html', './manifest.json', './icon.svg'];
+const CACHE = 'spike-v2';
+const RESSOURCES = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
