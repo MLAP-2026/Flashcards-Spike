@@ -7,8 +7,22 @@
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#d63384" />
-    <script type="module" crossorigin src="/Flashcards-Spike/app/assets/index-DAy7K217.js"></script>
-    <link rel="stylesheet" crossorigin href="/Flashcards-Spike/app/assets/index-DQfdMEvP.css">
+    <script>
+      // Apparence appliquee avant le premier rendu (pas de flash de mauvaise couleur).
+      // Memes valeurs et repli que app/src/preferences.js : valeur inconnue ou stockage bloque = defaut.
+      (function () {
+        var valeurs = { theme: ['neutre', 'rose'], rose: ['bonbon', 'pale', 'fuchsia'], mode: ['systeme', 'clair', 'sombre'] };
+        var defauts = { theme: 'neutre', rose: 'bonbon', mode: 'systeme' };
+        var racine = document.documentElement;
+        Object.keys(valeurs).forEach(function (nom) {
+          var valeur = null;
+          try { valeur = localStorage.getItem('flashcards.' + nom); } catch (e) { valeur = null; }
+          racine.setAttribute('data-' + nom, valeurs[nom].indexOf(valeur) >= 0 ? valeur : defauts[nom]);
+        });
+      })();
+    </script>
+    <script type="module" crossorigin src="/Flashcards-Spike/app/assets/index-CeQl3juB.js"></script>
+    <link rel="stylesheet" crossorigin href="/Flashcards-Spike/app/assets/index-B_QXwZd8.css">
   </head>
   <body>
     <div id="root"></div>
