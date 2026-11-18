@@ -1,6 +1,6 @@
 // Service worker genere par vite.config.js : ne pas modifier a la main.
-const CACHE = 'flashcards-e4fa2ace93f7';
-const RESSOURCES = ["./","index.html","manifest.json","icon.svg","icon-192.png","icon-512.png","assets/index-DQfdMEvP.css","assets/index-CA1ANUMs.js"];
+const CACHE = 'flashcards-11cefd5dfa2c';
+const RESSOURCES = ["./","index.html","manifest.json","icon.svg","icon-192.png","icon-512.png","assets/index-DQfdMEvP.css","assets/index-DAy7K217.js"];
 
 self.addEventListener('install', (event) => {
   // Pas de skipWaiting : la nouvelle version prend le relais au lancement suivant.
